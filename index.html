@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>보험 설계서 에디터 v7</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Malgun Gothic','맑은 고딕',sans-serif;background:#ebedf0;color:#333;font-size:13px}
+
+/* ═══ TOPBAR (심플) ═══ */
+.topbar{background:#fff;border-bottom:1px solid #ddd;padding:5px 14px;display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.topbar label{font-size:11px;color:#666;white-space:nowrap;user-select:none}
+.topbar select{border:1px solid #ccc;border-radius:3px;padding:4px 6px;font-size:11px;font-family:inherit;min-width:110px}
+.type-badge{font-size:9px;padding:1px 5px;border-radius:2px;font-weight:700;vertical-align:middle}
+.type-badge.life{background:#e8f0fe;color:#1a73e8}
+.type-badge.nonlife{background:#fce8e6;color:#d93025}
+.tb-sep{width:1px;height:22px;background:#ddd}
+.tb-btn{border:1px solid #ccc;background:#fff;border-radius:4px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;position:relative;flex-shrink:0}
+.tb-btn:hover{background:#f5f5f5}
+.tb-btn:active{background:#eee}
+.tb-btn[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:-24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;font-size:9px;padding:2px 6px;border-radius:2px;white-space:nowrap;z-index:200;pointer-events:none}
+.tb-spacer{flex:1}
+
+/* ═══ LAYOUT ═══ */
+.main{display:flex;min-height:calc(100vh - 42px)}
+.panel{width:270px;background:#fff;border-right:1px solid #ddd;overflow-y:auto;flex-shrink:0;font-size:12px}
+.panel .sec{padding:10px 12px;border-bottom:1px solid #eee}
+.panel h4{font-size:12px;color:#444;margin:0 0 6px;cursor:default}
+.panel .fld{margin-bottom:7px}
+.panel .fld label{display:block;font-size:10px;color:#888;margin-bottom:2px}
+.panel .fld input[type=text],.panel .fld select,.panel .fld textarea{width:100%;border:1px solid #ddd;border-radius:3px;padding:3px 5px;font-size:11px;font-family:inherit}
+.panel .fld input[type=range]{width:100%;accent-color:#666}
+.panel .fld-row{display:flex;align-items:center;gap:4px}
+.panel .fld-row .sl-v{font-size:10px;color:#999;min-width:30px;text-align:right}
+
+/* ═══ ACCORDION ═══ */
+.acc-head{display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none;padding:8px 12px;border-bottom:1px solid #eee;background:#fafafa}
+.acc-head:hover{background:#f5f5f5}
+.acc-head h4{margin:0;font-size:11px;color:#555}
+.acc-head .arr{font-size:10px;color:#aaa;transition:transform .2s}
+.acc-head.open .arr{transform:rotate(180deg)}
+.acc-body{display:none;padding:10px 12px;border-bottom:1px solid #eee}
+.acc-body.open{display:block}
+
+/* ═══ PRESET BUTTONS ═══ */
+.preset-row{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.preset-btn{border:1px solid #ddd;background:#f8f8f8;border-radius:3px;padding:2px 6px;font-size:9.5px;cursor:pointer;font-family:inherit;white-space:nowrap;color:#555}
+.preset-btn:hover{background:#eef;border-color:#bbc}
+.preset-btn:active{background:#ddf}
+
+/* ═══ ITEM LIST ═══ */
+.item-list{max-height:200px;overflow-y:auto;border:1px solid #eee;border-radius:3px;margin-top:4px}
+.item-row{display:flex;align-items:center;gap:3px;padding:2px 4px;font-size:10px;border-bottom:1px solid #f5f5f5}
+.item-row:last-child{border-bottom:none}
+.item-row:nth-child(odd){background:#fafafa}
+.item-row .item-n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item-row .item-a{color:#1a73e8;font-weight:600;min-width:60px;text-align:right;font-size:9.5px}
+.item-row .item-cat{font-size:8px;color:#aaa;min-width:28px;text-align:center}
+.item-row .item-del{cursor:pointer;color:#ccc;font-size:12px;width:16px;text-align:center;flex-shrink:0}
+.item-row .item-del:hover{color:#e33}
+.item-add-row{display:flex;gap:3px;margin-top:4px}
+.item-add-row input,.item-add-row select{font-size:10px;font-family:inherit;border:1px solid #ddd;border-radius:2px;padding:2px 4px}
+.item-add-row input{flex:1}
+.item-add-row select{width:60px}
+.btn-xs{border:1px solid #ccc;background:#fff;border-radius:2px;padding:2px 6px;font-size:10px;cursor:pointer;font-family:inherit}
+.btn-xs:hover{background:#f0f0f0}
+
+/* ═══ PREVIEW ═══ */
+.preview-area{flex:1;padding:16px;overflow:auto;display:flex;justify-content:center;align-items:flex-start;background:#ebedf0}
+.preview-wrap{background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.1);transition:width .2s;position:relative}
+.preview-wrap.vertical{width:640px}
+.preview-wrap.horizontal{width:1024px}
+.wm-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:hidden;z-index:10}
+.page-divider{border:none;border-top:1.5px dashed #ccc;margin:20px 0;position:relative}
+.page-divider::after{content:'─ 페이지 나눔 ─';position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:#fff;padding:0 10px;font-size:9px;color:#bbb;white-space:nowrap}
+
+/* ═══ DOC ═══ */
+.doc{padding:24px 20px;font-family:'Malgun Gothic','맑은 고딕',sans-serif;font-size:11px;line-height:1.55;color:#333;position:relative;z-index:1}
+.doc table{width:100%;border-collapse:collapse;margin-bottom:2px}
+.doc th,.doc td{padding:5px 7px;text-align:left;font-size:11px;vertical-align:middle}
+.doc th{font-weight:600;font-size:10.5px}
+.doc .amt{font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.doc .logo-block{margin-bottom:12px}
+.doc .logo-block .co-name{font-size:15px;font-weight:700;letter-spacing:.5px}
+.doc .logo-block .co-sub{font-size:9px;color:#aaa;margin-top:1px}
+.doc .sec-title{font-size:12px;font-weight:700;margin:10px 0 6px;padding:4px 0}
+.doc .planner-row{font-size:9.5px;color:#888;text-align:right;margin-top:8px;line-height:1.6}
+.doc .pg-num{text-align:right;font-size:9px;color:#ccc;margin-bottom:2px}
+.doc [contenteditable=true]:hover{outline:1px dashed rgba(0,0,0,.12);outline-offset:1px}
+.doc [contenteditable=true]:focus{outline:1px solid rgba(0,0,0,.2);outline-offset:1px;background:rgba(255,255,200,.12)}
+.card-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.card-item{border:1px solid #ddd;border-radius:3px;padding:6px 8px;flex:1 1 calc(50% - 6px);min-width:160px;font-size:10.5px;display:flex;justify-content:space-between;align-items:center}
+
+/* ═══ PRINT ═══ */
+@media print{
+  .topbar,.panel,.no-print{display:none!important}
+  .main{display:block}
+  .preview-area{padding:0;display:block;background:#fff}
+  .preview-wrap{box-shadow:none;width:100%!important}
+  .doc{padding:8mm 10mm}
+  .page-divider{page-break-before:always;border:none;margin:0;padding:0}
+  .page-divider::after{display:none}
+  .doc [contenteditable=true]:hover,.doc [contenteditable=true]:focus{outline:none;background:none}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════ TOPBAR (심플화) ═══════ -->
+<div class="topbar">
+  <label>보험사</label>
+  <select id="selCo" onchange="onCoChange()"></select>
+  <span id="typeBadge" class="type-badge"></span>
+  <label>패턴</label>
+  <select id="selPat" onchange="render()"></select>
+  <div class="tb-spacer"></div>
+  <div class="tb-btn" data-tip="PNG 다운로드" onclick="expPNG()">📷</div>
+  <div class="tb-btn" data-tip="PDF 다운로드" onclick="expPDF()">📄</div>
+  <div class="tb-btn" data-tip="인쇄" onclick="window.print()">🖨</div>
+</div>
+
+<!-- ═══════ MAIN ═══════ -->
+<div class="main">
+  <div class="panel no-print">
+
+    <!-- ── 설계사 정보 ── -->
+    <div class="sec">
+      <h4>👤 설계사 정보</h4>
+      <div class="fld">
+        <label>설계사명</label>
+        <input type="text" id="inpPlanner" placeholder="홍길동" oninput="render()">
+      </div>
+      <div class="fld">
+        <label>연락처</label>
+        <input type="text" id="inpPhone" placeholder="010-1234-5678" oninput="render()">
+      </div>
+      <div class="fld">
+        <label>상품명 <span style="color:#bbb">(생보형만 표시)</span></label>
+        <input type="text" id="inpProduct" placeholder="무배당 건강보험" oninput="render()">
+      </div>
+    </div>
+
+    <!-- ── 특약 관리 ── -->
+    <div class="sec">
+      <h4>📋 특약 관리 <span style="font-weight:400;color:#aaa;font-size:10px" id="itemCount"></span></h4>
+      <div style="font-size:10px;color:#888;margin-bottom:4px">프리셋 (원클릭 추가)</div>
+      <div class="preset-row" id="presetRow"></div>
+      <div class="item-list" id="itemList"></div>
+      <div class="item-add-row" style="margin-top:5px">
+        <input type="text" id="addName" placeholder="보장명">
+        <input type="text" id="addAmt" placeholder="금액" style="width:60px">
+        <select id="addCat"></select>
+        <button class="btn-xs" onclick="addItem()">+</button>
+      </div>
+    </div>
+
+    <!-- ── ⚙️ 설정 (아코디언) ── -->
+    <div class="acc-head" onclick="toggleAcc('accDisplay')">
+      <h4>⚙️ 표시 설정</h4><span class="arr">▼</span>
+    </div>
+    <div class="acc-body" id="accDisplay">
+      <div class="fld">
+        <label>컬러 농도</label>
+        <div class="fld-row">
+          <input type="range" id="rngInt" min="0" max="100" value="30" oninput="onSlider()" style="flex:1">
+          <span class="sl-v" id="intVal">30%</span>
+        </div>
+      </div>
+      <div class="fld">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="chkBW" onchange="onBW()" style="accent-color:#666"> 흑백 모드 (엑셀)
+        </label>
+      </div>
+      <div class="fld">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="chkLogo" checked onchange="render()" style="accent-color:#666"> 로고 표시
+        </label>
+      </div>
+      <div class="fld">
+        <label>로고 위치</label>
+        <div class="fld-row" style="gap:6px">
+          <label style="font-size:10px;cursor:pointer"><input type="radio" name="logoPos" value="left" onchange="render()" style="accent-color:#666"> 좌측</label>
+          <label style="font-size:10px;cursor:pointer"><input type="radio" name="logoPos" value="center" checked onchange="render()" style="accent-color:#666"> 중앙</label>
+          <label style="font-size:10px;cursor:pointer"><input type="radio" name="logoPos" value="right" onchange="render()" style="accent-color:#666"> 우측</label>
+        </div>
+      </div>
+      <div class="fld">
+        <label>방향</label>
+        <select id="selDir" onchange="render()">
+          <option value="vertical">세로 640</option>
+          <option value="horizontal">가로 1024</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ── 워터마크 (아코디언) ── -->
+    <div class="acc-head" onclick="toggleAcc('accWM')">
+      <h4>💧 워터마크</h4><span class="arr">▼</span>
+    </div>
+    <div class="acc-body" id="accWM">
+      <div class="fld">
+        <label>텍스트</label>
+        <input type="text" id="inpWmText" placeholder="김설계사 전용" oninput="renderWM()">
+      </div>
+      <div class="fld">
+        <label>이미지 (20MB, png/jpg)</label>
+        <input type="file" id="inpWmImg" accept="image/png,image/jpeg" style="font-size:10px;padding:2px" onchange="onWmImg(this)">
+        <div id="wmImgPreview" style="font-size:9px;color:#999;margin-top:2px"></div>
+      </div>
+      <div class="fld">
+        <label>농도</label>
+        <div class="fld-row">
+          <input type="range" id="rngWmOp" min="0" max="100" value="15" oninput="renderWM()" style="flex:1">
+          <span class="sl-v" id="wmOpVal">15%</span>
+        </div>
+      </div>
+      <div class="fld">
+        <label>텍스트 크기</label>
+        <div class="fld-row">
+          <input type="range" id="rngWmSize" min="20" max="120" value="48" oninput="renderWM()" style="flex:1">
+          <span class="sl-v" id="wmSzVal">48px</span>
+        </div>
+      </div>
+      <div class="fld"><button class="btn-xs" onclick="clearWM()">초기화</button></div>
+    </div>
+
+    <!-- 도움말 -->
+    <div style="padding:10px 12px;font-size:9.5px;color:#bbb;line-height:1.6">
+      텍스트/금액 클릭 편집 · 프리셋 원클릭 추가 · 자동 페이지 분할 · 워터마크 PNG/PDF 포함
+    </div>
+  </div>
+
+  <!-- ═══ PREVIEW ═══ -->
+  <div class="preview-area">
+    <div class="preview-wrap vertical" id="previewWrap">
+      <div class="wm-layer" id="wmLayer"></div>
+      <div id="docRoot"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   ACCORDION
+   ═══════════════════════════════════════════════════════════════ */
+function toggleAcc(id){
+  const body=document.getElementById(id);
+  const head=body.previousElementSibling;
+  const open=body.classList.toggle('open');
+  head.classList.toggle('open',open);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COMPANIES
+   ═══════════════════════════════════════════════════════════════ */
+const CO={
+  '삼성생명':{ci:'#1428A0',en:'Samsung Life',type:'생명'},'한화생명':{ci:'#F37021',en:'Hanwha Life',type:'생명'},
+  '교보생명':{ci:'#C8102E',en:'Kyobo Life',type:'생명'},'신한라이프':{ci:'#0046FF',en:'Shinhan Life',type:'생명'},
+  '흥국생명':{ci:'#EC008C',en:'Heungkuk Life',type:'생명'},'DB생명':{ci:'#00843D',en:'DB Life',type:'생명'},
+  'KB라이프':{ci:'#FFBC00',en:'KB Life',type:'생명'},'NH농협생명':{ci:'#009A44',en:'NH Life',type:'생명'},
+  '동양생명':{ci:'#003DA5',en:'Tongyang Life',type:'생명'},'미래에셋생명':{ci:'#F47920',en:'Mirae Asset Life',type:'생명'},
+  '하나생명':{ci:'#009B8D',en:'Hana Life',type:'생명'},'KDB생명':{ci:'#003478',en:'KDB Life',type:'생명'},
+  'ABL생명':{ci:'#E31937',en:'ABL Life',type:'생명'},'iM라이프':{ci:'#004DA8',en:'iM Life',type:'생명'},
+  'IBK연금보험':{ci:'#0072CE',en:'IBK Pension',type:'생명'},'푸본현대생명':{ci:'#00529B',en:'Fubon Hyundai',type:'생명'},
+  '메트라이프':{ci:'#0090DA',en:'MetLife',type:'생명'},'AIA생명':{ci:'#D31145',en:'AIA',type:'생명'},
+  '라이나생명':{ci:'#1B365D',en:'LINA (Chubb)',type:'생명'},
+  '삼성화재':{ci:'#003CDC',en:'Samsung Fire',type:'손해'},'현대해상':{ci:'#003DA5',en:'Hyundai Marine',type:'손해'},
+  'DB손해보험':{ci:'#00843D',en:'DB Insurance',type:'손해'},'KB손해보험':{ci:'#FFBC00',en:'KB Insurance',type:'손해'},
+  '메리츠화재':{ci:'#E8530E',en:'Meritz Fire',type:'손해'},'한화손해보험':{ci:'#F37021',en:'Hanwha General',type:'손해'},
+  '흥국화재':{ci:'#EC008C',en:'Heungkuk Fire',type:'손해'},'NH농협손보':{ci:'#009A44',en:'NH NongHyup',type:'손해'},
+  '하나손해보험':{ci:'#009B8D',en:'Hana Insurance',type:'손해'},'롯데손해보험':{ci:'#E60012',en:'Lotte Insurance',type:'손해'},
+  '서울보증보험':{ci:'#003087',en:'SGI',type:'손해'},'AXA손해보험':{ci:'#00008F',en:'AXA',type:'손해'},
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   COLOR ENGINE
+   ═══════════════════════════════════════════════════════════════ */
+function hex2rgb(h){return{r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),16),b:parseInt(h.slice(5,7),16)}}
+function rgb2hex(r,g,b){return'#'+[r,g,b].map(x=>Math.min(255,Math.max(0,Math.round(x))).toString(16).padStart(2,'0')).join('')}
+function tint(hex,ratio){const c=hex2rgb(hex);return rgb2hex(255-(255-c.r)*ratio,255-(255-c.g)*ratio,255-(255-c.b)*ratio)}
+function getC(){
+  const co=CO[document.getElementById('selCo').value];
+  const pct=parseInt(document.getElementById('rngInt').value)/100;
+  const bw=document.getElementById('chkBW').checked;
+  if(bw)return{hBg:'#f2f2f2',hTx:'#444',bdr:'#cccccc',amt:'#333',alt:'#fafafa',acc:'#666',sideBg:'#f2f2f2',logoBg:'#f8f8f8'};
+  const ci=co.ci;
+  return{hBg:tint(ci,pct*0.22),hTx:pct>0.65?tint(ci,pct*0.55):'#444',bdr:tint(ci,pct*0.10),amt:tint(ci,Math.max(0.40,pct)),alt:tint(ci,pct*0.05),acc:tint(ci,Math.max(0.28,pct*0.65)),sideBg:tint(ci,pct*0.14),logoBg:tint(ci,pct*0.07)};
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ITEM MANAGEMENT (특약 리스트)
+   ═══════════════════════════════════════════════════════════════ */
+let currentItems=[];
+
+const CATS_LIFE=['기본계약','특약'];
+const CATS_NONLIFE=['상해','질병','운전자','일상생활','기타'];
+
+// ── PRESETS ──
+const PRESETS_LIFE=[
+  {label:'암 기본세트',items:[
+    {n:'일반암진단비',a:'3,000만원',g:'100세',p:'20년',cat:'특약'},
+    {n:'유사암진단비',a:'300만원',g:'100세',p:'20년',cat:'특약'},
+    {n:'고액암진단비',a:'5,000만원',g:'100세',p:'20년',cat:'특약'},
+  ]},
+  {label:'3대질병 세트',items:[
+    {n:'일반암진단비',a:'3,000만원',g:'100세',p:'20년',cat:'특약'},
+    {n:'뇌혈관질환진단비',a:'1,000만원',g:'100세',p:'20년',cat:'특약'},
+    {n:'허혈심장질환진단비',a:'1,000만원',g:'100세',p:'20년',cat:'특약'},
+  ]},
+  {label:'수술입원 세트',items:[
+    {n:'질병수술비(1~5종)',a:'30~150만원',g:'100세',p:'20년',cat:'특약'},
+    {n:'상해수술비(1~5종)',a:'30~150만원',g:'80세',p:'20년',cat:'특약'},
+    {n:'질병입원일당(1일이상)',a:'3만원',g:'100세',p:'20년',cat:'특약'},
+  ]},
+  {label:'사망보장',items:[
+    {n:'일반사망',a:'1억원',g:'종신',p:'20년',cat:'기본계약'},
+    {n:'재해사망',a:'1억원',g:'80세',p:'20년',cat:'특약'},
+  ]},
+];
+const PRESETS_NONLIFE=[
+  {label:'암 기본세트',items:[
+    {n:'일반암진단비',a:'3,000만원',cat:'질병'},
+    {n:'유사암진단비',a:'300만원',cat:'질병'},
+    {n:'고액암진단비',a:'5,000만원',cat:'질병'},
+  ]},
+  {label:'3대질병 세트',items:[
+    {n:'일반암진단비',a:'3,000만원',cat:'질병'},
+    {n:'뇌혈관질환진단비',a:'1,000만원',cat:'질병'},
+    {n:'허혈심장질환진단비',a:'1,000만원',cat:'질병'},
+  ]},
+  {label:'수술입원 세트',items:[
+    {n:'질병수술비(1~5종)',a:'30~150만원',cat:'질병'},
+    {n:'상해수술비(1~5종)',a:'30~150만원',cat:'상해'},
+    {n:'질병입원일당(1일이상)',a:'3만원',cat:'질병'},
+  ]},
+  {label:'운전자 세트',items:[
+    {n:'운전자벌금(형사합의금)',a:'2,000만원',cat:'운전자'},
+    {n:'자동차사고부상(1~14급)',a:'100~2,000만원',cat:'운전자'},
+    {n:'자동차사고성형수술',a:'300만원',cat:'운전자'},
+  ]},
+  {label:'일상생활 세트',items:[
+    {n:'일상생활배상책임',a:'1억원',cat:'일상생활'},
+    {n:'전자기기손해',a:'50만원',cat:'일상생활'},
+  ]},
+  {label:'비급여 세트',items:[
+    {n:'비급여도수치료(6회)',a:'20만원',cat:'질병'},
+    {n:'비급여주사료(3회)',a:'10만원',cat:'질병'},
+    {n:'비급여MRI/MRA',a:'20만원',cat:'질병'},
+  ]},
+];
+
+const DEFAULT_LIFE=[
+  {n:'일반암진단비',a:'3,000만원',g:'100세',p:'20년',cat:'특약'},{n:'유사암진단비',a:'300만원',g:'100세',p:'20년',cat:'특약'},
+  {n:'뇌혈관질환진단비',a:'1,000만원',g:'100세',p:'20년',cat:'특약'},{n:'허혈심장질환진단비',a:'1,000만원',g:'100세',p:'20년',cat:'특약'},
+  {n:'질병후유장해(3%이상)',a:'1,000만원',g:'80세',p:'20년',cat:'특약'},{n:'상해후유장해(3%이상)',a:'1,000만원',g:'80세',p:'20년',cat:'특약'},
+  {n:'질병입원일당(1일이상)',a:'3만원',g:'100세',p:'20년',cat:'특약'},{n:'상해입원일당(1일이상)',a:'3만원',g:'80세',p:'20년',cat:'특약'},
+];
+const DEFAULT_NONLIFE=[
+  {n:'일반암진단비',a:'3,000만원',cat:'질병'},{n:'유사암진단비',a:'300만원',cat:'질병'},
+  {n:'뇌혈관질환진단비',a:'1,000만원',cat:'질병'},{n:'허혈심장질환진단비',a:'1,000만원',cat:'질병'},
+  {n:'질병후유장해(3%이상)',a:'1,000만원',cat:'질병'},{n:'상해후유장해(3%이상)',a:'1,000만원',cat:'상해'},
+  {n:'질병입원일당(1일이상)',a:'3만원',cat:'질병'},{n:'상해입원일당(1일이상)',a:'3만원',cat:'상해'},
+  {n:'질병수술비(1~5종)',a:'30~150만원',cat:'질병'},{n:'상해수술비(1~5종)',a:'30~150만원',cat:'상해'},
+  {n:'골절진단비(치아파절제외)',a:'30만원',cat:'상해'},{n:'화상진단비(심재2도이상)',a:'30만원',cat:'상해'},
+  {n:'운전자벌금(형사합의금)',a:'2,000만원',cat:'운전자'},{n:'자동차사고부상(1~14급)',a:'100~2,000만원',cat:'운전자'},
+  {n:'비급여도수치료(6회)',a:'20만원',cat:'질병'},
+];
+
+function getType(){return CO[document.getElementById('selCo').value].type}
+function getCats(){return getType()==='생명'?CATS_LIFE:CATS_NONLIFE}
+function getPresets(){return getType()==='생명'?PRESETS_LIFE:PRESETS_NONLIFE}
+
+function resetItems(){
+  currentItems=JSON.parse(JSON.stringify(getType()==='생명'?DEFAULT_LIFE:DEFAULT_NONLIFE));
+  refreshItemUI();
+  render();
+}
+function refreshItemUI(){
+  // count
+  document.getElementById('itemCount').textContent=`(${currentItems.length}개)`;
+  // list
+  const list=document.getElementById('itemList');
+  list.innerHTML=currentItems.map((it,i)=>`<div class="item-row">
+    <span class="item-cat">${it.cat||''}</span>
+    <span class="item-n" title="${it.n}">${it.n}</span>
+    <span class="item-a">${it.a}</span>
+    <span class="item-del" onclick="removeItem(${i})">×</span>
+  </div>`).join('');
+  // cat dropdown
+  const sel=document.getElementById('addCat');
+  const cats=getCats();
+  const prev=sel.value;
+  sel.innerHTML=cats.map(c=>`<option value="${c}">${c}</option>`).join('');
+  if(cats.includes(prev)) sel.value=prev;
+  // presets
+  const pr=document.getElementById('presetRow');
+  pr.innerHTML=getPresets().map((p,i)=>`<span class="preset-btn" onclick="applyPreset(${i})">${p.label}</span>`).join('');
+}
+function addItem(){
+  const n=document.getElementById('addName').value.trim();
+  const a=document.getElementById('addAmt').value.trim();
+  const cat=document.getElementById('addCat').value;
+  if(!n) return;
+  const item={n,a:a||'0원',cat};
+  if(getType()==='생명'){item.g='100세';item.p='20년'}
+  currentItems.push(item);
+  document.getElementById('addName').value='';
+  document.getElementById('addAmt').value='';
+  refreshItemUI();render();
+}
+function removeItem(i){currentItems.splice(i,1);refreshItemUI();render()}
+function applyPreset(i){
+  const p=getPresets()[i];
+  p.items.forEach(it=>{
+    if(!currentItems.find(x=>x.n===it.n)){
+      currentItems.push(JSON.parse(JSON.stringify(it)));
+    }
+  });
+  refreshItemUI();render();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGE SPLIT
+   ═══════════════════════════════════════════════════════════════ */
+const PPG_LIFE=10,PPG_NL_TBL=14,PPG_NL_CARD=12,PPG_NL_GRP=16;
+function getPPG(){
+  if(getType()==='생명')return PPG_LIFE;
+  const p=document.getElementById('selPat').value;
+  return p==='J'?PPG_NL_CARD:p==='K'?PPG_NL_GRP:PPG_NL_TBL;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   WATERMARK
+   ═══════════════════════════════════════════════════════════════ */
+let wmImgData=null;
+function onWmImg(input){
+  const f=input.files[0];if(!f)return;
+  if(f.size>20*1024*1024){alert('20MB 이하');input.value='';return}
+  if(!f.type.match(/^image\/(png|jpeg)$/)){alert('PNG/JPG만');input.value='';return}
+  const r=new FileReader();r.onload=e=>{wmImgData=e.target.result;document.getElementById('wmImgPreview').textContent='✅ '+f.name;renderWM()};r.readAsDataURL(f);
+}
+function clearWM(){
+  document.getElementById('inpWmText').value='';document.getElementById('inpWmImg').value='';
+  document.getElementById('rngWmOp').value=15;document.getElementById('rngWmSize').value=48;
+  document.getElementById('wmOpVal').textContent='15%';document.getElementById('wmSzVal').textContent='48px';
+  document.getElementById('wmImgPreview').textContent='';wmImgData=null;renderWM();
+}
+function renderWM(){
+  const txt=document.getElementById('inpWmText').value.trim();
+  const op=parseInt(document.getElementById('rngWmOp').value)/100;
+  const sz=parseInt(document.getElementById('rngWmSize').value);
+  document.getElementById('wmOpVal').textContent=document.getElementById('rngWmOp').value+'%';
+  document.getElementById('wmSzVal').textContent=sz+'px';
+  let h='';
+  if(txt) h+=`<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);white-space:nowrap;font-weight:700;font-size:${sz}px;color:rgba(0,0,0,${op});user-select:none;letter-spacing:2px">${txt}</div>`;
+  if(wmImgData) h+=`<img src="${wmImgData}" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-25deg);max-width:55%;max-height:35%;object-fit:contain;opacity:${op}">`;
+  document.getElementById('wmLayer').innerHTML=h;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOGO POSITION HELPER
+   ═══════════════════════════════════════════════════════════════ */
+function getLogoPos(){
+  const r=document.querySelector('input[name="logoPos"]:checked');
+  return r?r.value:'center';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════════════════════════════ */
+function render(){
+  const pat=document.getElementById('selPat').value;
+  const coK=document.getElementById('selCo').value;
+  const co=CO[coK];const c=getC();
+  const items=currentItems;
+  const pl=document.getElementById('inpPlanner').value;
+  const ph=document.getElementById('inpPhone').value;
+  const prod=document.getElementById('inpProduct').value;
+  const logo=document.getElementById('chkLogo').checked;
+  const dir=document.getElementById('selDir').value;
+  const lp=getLogoPos();
+
+  document.getElementById('previewWrap').className='preview-wrap '+dir;
+
+  const ppg=getPPG();
+  const pages=[];
+  for(let i=0;i<items.length;i+=ppg)pages.push(items.slice(i,i+ppg));
+  if(!pages.length)pages.push([]);
+
+  const gen={A:patA,B:patB,C:patC,D:patD,E:patE,G:patG,H:patH,I:patI,J:patJ,K:patK}[pat];
+  let html='';
+  pages.forEach((pg,idx)=>{
+    if(idx>0)html+='<hr class="page-divider">';
+    html+=gen(coK,co,c,pg,pl,ph,prod,logo,idx,pages.length,lp);
+  });
+  document.getElementById('docRoot').innerHTML='<div class="doc">'+html+'</div>';
+  renderWM();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+function logoH(k,co,c,show,pos){
+  if(!show)return'';
+  const align=pos==='left'?'left':pos==='right'?'right':'center';
+  return`<div class="logo-block" style="text-align:${align}"><div class="co-name" style="color:${c.acc}" contenteditable="true">${k}</div><div class="co-sub">${co.en}</div></div>`;
+}
+function plannerH(p,ph){
+  if(!p&&!ph)return'';
+  let s='<div class="planner-row">';
+  if(p)s+=`담당: <span contenteditable="true">${p}</span>`;
+  if(p&&ph)s+=' / ';
+  if(ph)s+=`연락처: <span contenteditable="true">${ph}</span>`;
+  return s+'</div>';
+}
+function pgH(i,t){return t>1?`<div class="pg-num">${i+1} / ${t}</div>`:''}
+function summaryLife(c,last,pl,ph){
+  if(!last)return'';
+  return`<table style="margin-top:8px"><tr style="background:${c.alt}"><td style="border:1px solid ${c.bdr};padding:5px 7px">월 보험료</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};font-size:13px" contenteditable="true">85,400원</td></tr><tr><td style="border:1px solid ${c.bdr};padding:5px 7px">납입 / 보험기간</td><td style="border:1px solid ${c.bdr};text-align:right;padding:5px 7px" contenteditable="true">20년납 / 100세만기</td></tr></table>${plannerH(pl,ph)}`;
+}
+function summaryNL(c,last,pl,ph){
+  if(!last)return'';
+  return`<div style="margin-top:8px;padding:7px 10px;background:${c.alt};border:1px solid ${c.bdr};display:flex;justify-content:space-between;align-items:center"><span style="font-size:11px;font-weight:700">합계 보험료</span><span class="amt" style="color:${c.amt};font-size:14px" contenteditable="true">62,300원</span></div><div style="font-size:10px;color:#aaa;margin-top:4px" contenteditable="true">보험기간: 100세만기 / 납입기간: 20년납 / 갱신형</div>${plannerH(pl,ph)}`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PATTERNS — 생보 A~E (lp 파라미터 추가)
+   ═══════════════════════════════════════════════════════════════ */
+function patA(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  let rows=items.map((it,i)=>`<tr style="background:${i%2?c.alt:'#fff'}"><td style="border:1px solid ${c.bdr};padding:5px 7px" contenteditable="true">${it.n}</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};padding:5px 7px" contenteditable="true">${it.a}</td><td style="border:1px solid ${c.bdr};text-align:center;padding:5px 7px;font-size:10px" contenteditable="true">${it.g||'100세'}</td><td style="border:1px solid ${c.bdr};text-align:center;padding:5px 7px;font-size:10px" contenteditable="true">${it.p||'20년'}</td></tr>`).join('');
+  return`${pgH(pi,pt)}${pi===0?logoH(k,co,c,logo,lp):''}
+    ${pi===0&&prod?`<div style="text-align:center;font-size:12px;color:#555;margin-bottom:6px" contenteditable="true">${prod}</div>`:''}
+    ${pi===0?`<div class="sec-title" style="color:${c.acc};border-bottom:1px solid ${c.bdr}">보장내역</div>`:''}
+    <table><thead><tr style="background:${c.hBg}"><th style="border:1px solid ${c.bdr};color:${c.hTx}">보장명</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:100px;text-align:right">가입금액</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:60px;text-align:center">보장기간</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:55px;text-align:center">납입기간</th></tr></thead><tbody>${rows}</tbody></table>
+    ${summaryLife(c,pi===pt-1,pl,ph)}`;
+}
+
+function patB(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  const base=items.filter(x=>x.cat==='기본계약');
+  const rider=items.filter(x=>x.cat!=='기본계약');
+  function mkR(arr,s){return arr.map((it,i)=>`<tr style="background:${(s+i)%2?c.alt:'#fff'}"><td style="border:1px solid ${c.bdr};padding:5px 7px" contenteditable="true">${it.n}</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};padding:5px 7px" contenteditable="true">${it.a}</td><td style="border:1px solid ${c.bdr};text-align:center;padding:5px 7px;font-size:10px" contenteditable="true">${it.g||'100세'}</td><td style="border:1px solid ${c.bdr};text-align:center;padding:5px 7px;font-size:10px" contenteditable="true">${it.p||'20년'}</td></tr>`).join('')}
+  const th=`<tr style="background:${c.hBg}"><th style="border:1px solid ${c.bdr};color:${c.hTx}">보장명</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:100px;text-align:right">가입금액</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:60px;text-align:center">보장기간</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:55px;text-align:center">납입기간</th></tr>`;
+  let sec='';
+  if(base.length)sec+=`<div style="font-size:10.5px;font-weight:700;color:${c.acc};margin:6px 0 3px;padding:3px 6px;background:${c.alt};border-left:2px solid ${c.acc}">기본계약</div><table><thead>${th}</thead><tbody>${mkR(base,0)}</tbody></table>`;
+  if(rider.length)sec+=`<div style="font-size:10.5px;font-weight:700;color:${c.acc};margin:8px 0 3px;padding:3px 6px;background:${c.alt};border-left:2px solid ${c.acc}">특약</div><table><thead>${th}</thead><tbody>${mkR(rider,base.length)}</tbody></table>`;
+  if(!sec)sec=`<table><thead>${th}</thead><tbody>${mkR(items,0)}</tbody></table>`;
+  return`${pgH(pi,pt)}${pi===0?logoH(k,co,c,logo,lp):''}
+    ${pi===0&&prod?`<div style="text-align:center;font-size:13px;font-weight:700;color:${c.acc};margin-bottom:8px;padding-bottom:5px;border-bottom:2px solid ${c.acc}" contenteditable="true">${prod}</div>`:''}
+    ${sec}${summaryLife(c,pi===pt-1,pl,ph)}`;
+}
+
+function patC(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  let rows=items.map(it=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid ${c.bdr}"><span contenteditable="true" style="font-size:11px;flex:1">${it.n}</span><span class="amt" style="color:${c.amt};white-space:nowrap;min-width:80px;text-align:right" contenteditable="true">${it.a}</span><span style="font-size:9.5px;color:#aaa;min-width:45px;text-align:center" contenteditable="true">${it.g||'100세'}</span></div>`).join('');
+  return`${pgH(pi,pt)}<div style="display:flex"><div style="width:3px;background:${c.acc};flex-shrink:0;border-radius:2px"></div><div style="flex:1;padding-left:12px">
+    ${pi===0?logoH(k,co,c,logo,lp):''}
+    ${pi===0&&prod?`<div style="font-size:11px;color:#666;margin-bottom:4px" contenteditable="true">${prod}</div>`:''}
+    ${pi===0?`<div class="sec-title" style="color:${c.acc};border-bottom:1px solid ${c.bdr}">가입설계서</div>`:''}
+    ${rows}
+    ${pi===pt-1?`<div style="margin-top:10px;padding:6px 0;border-top:2px solid ${c.acc};display:flex;justify-content:space-between;font-weight:700"><span>월 납입보험료</span><span class="amt" style="color:${c.amt};font-size:13px" contenteditable="true">85,400원</span></div><div style="font-size:10px;color:#aaa" contenteditable="true">20년납 / 100세만기</div>${plannerH(pl,ph)}`:''}
+  </div></div>`;
+}
+
+function patD(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  let rows=items.map((it,i)=>`<tr style="background:${i%2?c.alt:'#fff'}"><td style="border:1px solid ${c.bdr};text-align:center;font-size:10px;width:32px">${i+1+pi*getPPG()}</td><td style="border:1px solid ${c.bdr};padding:5px 7px" contenteditable="true">${it.n}</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};padding:5px 7px" contenteditable="true">${it.a}</td><td style="border:1px solid ${c.bdr};text-align:center;font-size:10px" contenteditable="true">${it.g||'100세'}</td></tr>`).join('');
+  const logoAlign=lp==='left'?'left':lp==='right'?'right':'center';
+  return`${pgH(pi,pt)}
+    ${pi===0&&logo?`<div style="text-align:${logoAlign};padding:10px;background:${c.logoBg};margin-bottom:10px;border-radius:2px"><div style="font-size:17px;font-weight:700;color:${c.acc}" contenteditable="true">${k}</div><div style="font-size:9px;color:#aaa">${co.en}</div>${prod?`<div style="font-size:11px;color:#666;margin-top:3px" contenteditable="true">${prod}</div>`:''}</div>`:''}
+    <table><thead><tr style="background:${c.hBg}"><th style="border:1px solid ${c.bdr};color:${c.hTx};width:32px;text-align:center">No</th><th style="border:1px solid ${c.bdr};color:${c.hTx}">보장항목</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:100px;text-align:right">가입금액</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:55px;text-align:center">보장기간</th></tr></thead><tbody>${rows}</tbody></table>
+    ${pi===pt-1?`<table style="margin-top:6px"><tr style="background:${c.hBg}"><td style="border:1px solid ${c.bdr};font-weight:700;color:${c.hTx};padding:6px 7px">총 월 보험료</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};font-size:14px" contenteditable="true">85,400원</td></tr></table><div style="font-size:10px;color:#aaa;margin-top:4px" contenteditable="true">납입기간: 20년납 | 보험기간: 100세만기</div>${plannerH(pl,ph)}`:''}`;
+}
+
+function patE(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  const cats=[{t:'암 보장',f:it=>it.n.includes('암')},{t:'뇌/심장 보장',f:it=>it.n.includes('뇌')||it.n.includes('심')},{t:'기타 보장',f:()=>true}];
+  let rest=[...items];let sec='';
+  cats.forEach(cat=>{const m=rest.filter(cat.f);if(!m.length)return;rest=rest.filter(x=>!m.includes(x));
+    sec+=`<div style="font-size:10.5px;font-weight:700;color:${c.acc};margin:8px 0 3px;padding:3px 6px;background:${c.alt};border-left:2px solid ${c.acc}">${cat.t}</div><table><tbody>${m.map((it,i)=>`<tr style="background:${i%2?c.alt:'#fff'}"><td style="border:1px solid ${c.bdr};padding:4px 7px" contenteditable="true">${it.n}</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};padding:4px 7px" contenteditable="true">${it.a}</td><td style="border:1px solid ${c.bdr};text-align:center;font-size:10px" contenteditable="true">${it.g||'100세'}</td></tr>`).join('')}</tbody></table>`});
+  return`${pgH(pi,pt)}${pi===0?logoH(k,co,c,logo,lp):''}
+    ${pi===0?`<div style="text-align:center;font-size:13px;font-weight:700;color:${c.acc};margin:4px 0 10px;padding-bottom:5px;border-bottom:2px solid ${c.acc}">${prod||'보장설계 안내서'}</div>`:''}
+    ${sec}
+    ${pi===pt-1?`<div style="margin-top:10px;padding:8px;border:1px solid ${c.bdr};border-radius:2px;background:${c.alt};display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700">월 납입보험료</span><span class="amt" style="color:${c.amt};font-size:14px" contenteditable="true">85,400원</span></div><div style="font-size:10px;color:#aaa;text-align:center;margin-top:3px" contenteditable="true">납입기간 20년 / 보험기간 100세만기 / 갱신형</div>${plannerH(pl,ph)}`:''}`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PATTERNS — 손보 G~K
+   ═══════════════════════════════════════════════════════════════ */
+function patG(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  let rows=items.map((it,i)=>`<tr style="background:${i%2?c.alt:'#fff'}"><td style="border:1px solid ${c.bdr};padding:4px 7px;font-size:10.5px" contenteditable="true">${it.n}</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};padding:4px 7px;font-size:10.5px;width:100px" contenteditable="true">${it.a}</td></tr>`).join('');
+  return`${pgH(pi,pt)}${pi===0?logoH(k,co,c,logo,lp):''}
+    ${pi===0?`<div style="background:${c.hBg};padding:7px 10px;font-size:12px;font-weight:700;color:${c.hTx};border-left:3px solid ${c.acc}">가입설계서</div>`:''}
+    <table style="margin-top:4px"><thead><tr style="background:${c.hBg}"><th style="border:1px solid ${c.bdr};color:${c.hTx};font-size:10.5px">보장명</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:100px;text-align:right;font-size:10.5px">가입금액</th></tr></thead><tbody>${rows}</tbody></table>
+    ${summaryNL(c,pi===pt-1,pl,ph)}`;
+}
+
+function patH(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  let rows=items.map((it,i)=>`<tr style="background:${i%2?c.alt:'#fff'}"><td style="border:1px solid ${c.bdr};text-align:center;font-size:9.5px;width:28px;color:#999">${i+1+pi*getPPG()}</td><td style="border:1px solid ${c.bdr};padding:4px 7px;font-size:10.5px" contenteditable="true">${it.n}</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};padding:4px 7px;font-size:10.5px;width:95px" contenteditable="true">${it.a}</td></tr>`).join('');
+  const pgLabel=pt>1?`<div style="text-align:right;font-size:9px;color:${c.acc};margin-bottom:4px;font-weight:600">${pi+1} / ${pt} 페이지</div>`:'';
+  const logoAlign=lp==='left'?'flex-start':lp==='right'?'flex-end':'space-between';
+  return`${pgLabel}
+    ${pi===0&&logo?`<div style="padding:8px 10px;background:${c.logoBg};margin-bottom:8px;display:flex;justify-content:${logoAlign};align-items:center;gap:10px;border-radius:2px"><div><div style="font-size:14px;font-weight:700;color:${c.acc}" contenteditable="true">${k}</div><div style="font-size:9px;color:#aaa">${co.en}</div></div><div style="font-size:12px;font-weight:700;color:${c.hTx}">가입설계서</div></div>`:''}
+    ${pi===0&&!logo?`<div style="background:${c.hBg};padding:7px 10px;font-size:12px;font-weight:700;color:${c.hTx};margin-bottom:4px;border-left:3px solid ${c.acc}">가입설계서</div>`:''}
+    <table><thead><tr style="background:${c.hBg}"><th style="border:1px solid ${c.bdr};color:${c.hTx};width:28px;text-align:center;font-size:10px">No</th><th style="border:1px solid ${c.bdr};color:${c.hTx};font-size:10.5px">보장명</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:95px;text-align:right;font-size:10.5px">가입금액</th></tr></thead><tbody>${rows}</tbody></table>
+    ${pi===pt-1?`<div style="margin-top:8px;background:${c.hBg};padding:8px 10px;border-radius:2px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:11px;color:${c.hTx}">합계 월 보험료</div><div style="font-size:9.5px;color:#aaa;margin-top:1px" contenteditable="true">보험기간: 100세만기 | 납입기간: 20년납</div></div><div class="amt" style="color:${c.amt};font-size:16px" contenteditable="true">62,300원</div></div>${plannerH(pl,ph)}`:''}`;
+}
+
+function patI(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  let rows=items.map((it,i)=>`<tr style="background:${i%2?c.alt:'#fff'}"><td style="border:1px solid ${c.bdr};padding:4px 7px;font-size:10.5px" contenteditable="true">${it.n}</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};padding:4px 7px;font-size:10.5px;width:90px" contenteditable="true">${it.a}</td><td style="border:1px solid ${c.bdr};text-align:center;padding:4px 5px;font-size:9.5px;width:52px" contenteditable="true">100세</td><td style="border:1px solid ${c.bdr};text-align:center;padding:4px 5px;font-size:9.5px;width:48px" contenteditable="true">20년</td></tr>`).join('');
+  return`${pgH(pi,pt)}${pi===0?logoH(k,co,c,logo,lp):''}
+    ${pi===0?`<div style="background:${c.hBg};padding:7px 10px;font-size:12px;font-weight:700;color:${c.hTx};border-left:3px solid ${c.acc}">가입설계서 (상세)</div>`:''}
+    <table style="margin-top:4px"><thead><tr style="background:${c.hBg}"><th style="border:1px solid ${c.bdr};color:${c.hTx};font-size:10.5px">보장명</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:90px;text-align:right;font-size:10.5px">가입금액</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:52px;text-align:center;font-size:10px">보장기간</th><th style="border:1px solid ${c.bdr};color:${c.hTx};width:48px;text-align:center;font-size:10px">납입기간</th></tr></thead><tbody>${rows}</tbody></table>
+    ${summaryNL(c,pi===pt-1,pl,ph)}`;
+}
+
+function patJ(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  let cards=items.map(it=>`<div class="card-item" style="border-color:${c.bdr};background:${c.alt}"><span style="flex:1;font-size:10.5px" contenteditable="true">${it.n}</span><span class="amt" style="color:${c.amt};font-size:11px;min-width:75px;text-align:right" contenteditable="true">${it.a}</span></div>`).join('');
+  return`${pgH(pi,pt)}${pi===0?logoH(k,co,c,logo,lp):''}
+    ${pi===0?`<div style="background:${c.hBg};padding:7px 10px;font-size:12px;font-weight:700;color:${c.hTx};border-left:3px solid ${c.acc};margin-bottom:2px">가입설계서</div>`:''}
+    <div class="card-grid">${cards}</div>
+    ${pi===pt-1?`<div style="margin-top:10px;padding:8px 12px;background:${c.hBg};border-radius:3px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:700;font-size:12px;color:${c.hTx}">합계 월 보험료</div><div style="font-size:9.5px;color:#aaa;margin-top:2px" contenteditable="true">보험기간: 100세만기 | 납입기간: 20년납 | 갱신형</div></div><div class="amt" style="color:${c.amt};font-size:16px" contenteditable="true">62,300원</div></div>${plannerH(pl,ph)}`:''}`;
+}
+
+function patK(k,co,c,items,pl,ph,prod,logo,pi,pt,lp){
+  const groups={};
+  items.forEach(it=>{const g=it.cat||'기타';if(!groups[g])groups[g]=[];groups[g].push(it)});
+  const order=['질병','상해','운전자','일상생활','기타'];
+  const labels={질병:'질병 보장',상해:'상해 보장',운전자:'운전자 보장',일상생활:'일상생활',기타:'기타 보장'};
+  let sec='';
+  order.forEach(g=>{if(!groups[g]||!groups[g].length)return;
+    sec+=`<div style="font-size:10.5px;font-weight:700;color:${c.acc};margin:${sec?'10':'4'}px 0 3px;padding:4px 8px;background:${c.alt};border-left:3px solid ${c.acc};border-radius:0 2px 2px 0">${labels[g]||g}</div><table><tbody>${groups[g].map((it,i)=>`<tr style="background:${i%2?c.alt:'#fff'}"><td style="border:1px solid ${c.bdr};padding:4px 7px;font-size:10.5px" contenteditable="true">${it.n}</td><td class="amt" style="border:1px solid ${c.bdr};color:${c.amt};padding:4px 7px;font-size:10.5px;width:100px" contenteditable="true">${it.a}</td></tr>`).join('')}</tbody></table>`});
+  return`${pgH(pi,pt)}${pi===0?logoH(k,co,c,logo,lp):''}
+    ${pi===0?`<div style="background:${c.hBg};padding:7px 10px;font-size:12px;font-weight:700;color:${c.hTx};border-left:3px solid ${c.acc}">가입설계서</div>`:''}
+    ${sec}${summaryNL(c,pi===pt-1,pl,ph)}`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PATTERN DROPDOWN
+   ═══════════════════════════════════════════════════════════════ */
+const PAT_LIFE=[{v:'A',t:'A 4컬럼기본'},{v:'B',t:'B 기본+특약구분'},{v:'C',t:'C 사이드바형'},{v:'D',t:'D 로고강조형'},{v:'E',t:'E 카테고리형'}];
+const PAT_NL=[{v:'G',t:'G 심플2컬럼'},{v:'H',t:'H NH농협손보형'},{v:'I',t:'I 상세4컬럼'},{v:'J',t:'J 카드형'},{v:'K',t:'K 그룹형'}];
+
+function updatePatternDropdown(){
+  const sel=document.getElementById('selPat');
+  const pats=getType()==='생명'?PAT_LIFE:PAT_NL;
+  const prev=sel.value;sel.innerHTML='';
+  pats.forEach(p=>{const o=document.createElement('option');o.value=p.v;o.textContent=p.t;sel.appendChild(o)});
+  if(pats.find(p=>p.v===prev))sel.value=prev;
+}
+function updateTypeBadge(){
+  const b=document.getElementById('typeBadge');const t=getType();
+  b.className='type-badge '+(t==='생명'?'life':'nonlife');b.textContent=t==='생명'?'생보형':'손보형';
+}
+function onCoChange(){
+  updatePatternDropdown();updateTypeBadge();resetItems();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EXPORT
+   ═══════════════════════════════════════════════════════════════ */
+async function capture(){
+  const wrap=document.getElementById('previewWrap');
+  wrap.querySelectorAll('[contenteditable]').forEach(e=>{e.style.outline='none';e.style.background='none'});
+  return html2canvas(wrap,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:wrap.scrollWidth,height:wrap.scrollHeight});
+}
+async function expPNG(){const cv=await capture();const a=document.createElement('a');a.download=`설계서_${document.getElementById('selCo').value}.png`;a.href=cv.toDataURL('image/png');a.click()}
+async function expPDF(){
+  const cv=await capture();const{jsPDF}=window.jspdf;
+  const o=document.getElementById('selDir').value==='horizontal'?'l':'p';
+  const pdf=new jsPDF(o,'mm','a4');
+  const pw=pdf.internal.pageSize.getWidth(),ph2=pdf.internal.pageSize.getHeight(),m=10;
+  const uw=pw-m*2,uh=ph2-m*2,ratio=uw/cv.width,sh=cv.height*ratio;
+  if(sh<=uh){pdf.addImage(cv.toDataURL('image/png'),'PNG',m,m,uw,sh)}
+  else{const slH=uh/ratio;let y=0,pg=0;while(y<cv.height){if(pg>0)pdf.addPage();const h=Math.min(slH,cv.height-y);const tmp=document.createElement('canvas');tmp.width=cv.width;tmp.height=h;tmp.getContext('2d').drawImage(cv,0,y,cv.width,h,0,0,cv.width,h);pdf.addImage(tmp.toDataURL('image/png'),'PNG',m,m,uw,h*ratio);y+=h;pg++}}
+  pdf.save(`설계서_${document.getElementById('selCo').value}.pdf`);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EVENT HANDLERS
+   ═══════════════════════════════════════════════════════════════ */
+function onSlider(){document.getElementById('intVal').textContent=document.getElementById('rngInt').value+'%';if(parseInt(document.getElementById('rngInt').value)>0)document.getElementById('chkBW').checked=false;render()}
+function onBW(){if(document.getElementById('chkBW').checked){document.getElementById('rngInt').value=0;document.getElementById('intVal').textContent='0%'}render()}
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════════ */
+(function(){
+  const sel=document.getElementById('selCo');
+  const gL=document.createElement('optgroup');gL.label='── 생명보험사 ──';
+  const gN=document.createElement('optgroup');gN.label='── 손해보험사 ──';
+  Object.keys(CO).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;(CO[k].type==='생명'?gL:gN).appendChild(o)});
+  sel.appendChild(gL);sel.appendChild(gN);
+  updatePatternDropdown();updateTypeBadge();resetItems();
+  document.addEventListener('keydown',e=>{if(e.ctrlKey&&e.key==='p'){e.preventDefault();window.print()}});
+})();
+</script>
+</body>
+</html>
